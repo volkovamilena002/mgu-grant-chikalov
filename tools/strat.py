@@ -282,6 +282,15 @@ def cmd_use(args):
     print(f"Активный проект: {p.slug}")
 
 
+def cmd_deactivate(args):
+    """Снять активный проект: хук стоимости перестаёт записывать расходы в проект
+    (нужно, когда в сессии идёт работа над самим агентом, а не над задачей)."""
+    cur = active_slug()
+    if ACTIVE_FILE.exists():
+        ACTIVE_FILE.unlink()
+    print(f"Активный проект снят{f' (был {cur})' if cur else ''}. Вернуть: strat use <slug>")
+
+
 def cmd_list(args):
     cur = active_slug()
     if not PROJECTS.exists():
@@ -1053,6 +1062,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     a = sp.add_parser("init", help="создать проект"); a.add_argument("slug"); a.add_argument("--title"); a.add_argument("--question"); a.set_defaults(fn=cmd_init)
     a = sp.add_parser("use", help="сделать проект активным"); a.add_argument("slug"); a.set_defaults(fn=cmd_use)
+    a = sp.add_parser("deactivate", help="снять активный проект (работа над самим агентом)"); a.set_defaults(fn=cmd_deactivate)
     a = sp.add_parser("list", help="список проектов"); a.set_defaults(fn=cmd_list)
     a = sp.add_parser("status", help="где мы и что дальше"); a.add_argument("--json", action="store_true"); a.add_argument("--journal", type=int, default=0, metavar="N"); a.set_defaults(fn=cmd_status)
     a = sp.add_parser("stage", help="перейти на стадию"); a.add_argument("name", choices=STAGES); a.add_argument("--next"); a.add_argument("--force", action="store_true"); a.set_defaults(fn=cmd_stage)
@@ -1142,7 +1152,7 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     if getattr(args, "cmd", None) == "step" and args.action != "pending" and not args.key:
         die("нужен ключ шага")
-    slug = None if args.cmd in ("init", "use", "list") else active_slug(getattr(args, "project", None))
+    slug = None if args.cmd in ("init", "use", "list", "deactivate") else active_slug(getattr(args, "project", None))
     read_only = args.cmd in ("status", "list", "validate", "search") or getattr(args, "action", None) in ("list", "show", "check", "pending")
     if slug and not read_only and (PROJECTS / slug).is_dir():
         with ProjectLock(PROJECTS / slug / ".lock"):

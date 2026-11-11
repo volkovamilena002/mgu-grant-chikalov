@@ -4,3 +4,4 @@ markitdown[all]>=0.1.0   # docx/pdf/xlsx/pptx/html → Markdown (strat ingest)
 pandas>=2.2              # анализ таблиц (навык data-analysis)
 openpyxl>=3.1            # чтение xlsx для pandas
 faster-whisper>=1.0      # локальная расшифровка аудио/видео (необязательно, тяжёлая)
+markdown>=3.5             # сборка docs/description.pdf (docs/build_pdf.py)
