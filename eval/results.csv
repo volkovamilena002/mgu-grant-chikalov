@@ -1,1 +1,3 @@
 task,method,minutes_total,minutes_human,usd,human_interventions,claims_sampled,claims_verified,hallucinations,rubric_score,rubric_max,notes
+esim-travel,agent,58,,7.3,4,20,17,0,34.5,36,"время по часам с перерывом сессии и ожиданием на воротах; 3 partial; покрытие чисел ссылками 28/29; рубрика — среднее Haiku 35 и Opus 34"
+esim-travel,chat-baseline,5.4,0,1.31,0,20,12,0,27,36,"один запрос без уточнений; 6 partial, 2 unverifiable; покрытие чисел ссылками 10/35; рубрика Haiku 27, Opus 27"

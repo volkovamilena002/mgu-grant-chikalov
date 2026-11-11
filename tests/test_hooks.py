@@ -117,6 +117,22 @@ class HooksTest(unittest.TestCase):
         # 1M токенов часового кэша × $4 × 2 + 3 поиска × $0.01
         self.assertAlmostEqual(rows[0]["usd"], 8.03, places=4)
 
+    def test_cost_tracker_switching_projects_does_not_double_count(self):
+        tr = self.tmp / "sess3.jsonl"
+        def write(ids):
+            with tr.open("w", encoding="utf-8") as f:
+                for i in ids:
+                    f.write(json.dumps({"message": {"id": i, "model": "claude-opus-5-5",
+                                                    "usage": {"input_tokens": 0, "output_tokens": 1_000_000}}}) + "\n")
+        ev = {"session_id": "sess3", "transcript_path": str(tr)}
+        write(["a"]); self.hook("cost_tracker.py", ev)                 # засчитано demo
+        (self.tmp / "projects" / ".active").unlink()                   # без активного проекта
+        write(["a", "b"]); self.hook("cost_tracker.py", ev)            # b — никому
+        self.strat("use", "demo")
+        write(["a", "b", "c"]); self.hook("cost_tracker.py", ev)       # demo получает только c
+        rows = [json.loads(l) for l in (self.proj / "costs.jsonl").read_text(encoding="utf-8").splitlines() if l]
+        self.assertEqual(sum(r["output"] for r in rows), 2_000_000)
+
 
 if __name__ == "__main__":
     unittest.main()

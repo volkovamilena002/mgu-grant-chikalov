@@ -1,0 +1,15 @@
+{
+  "models": {
+    "claude-opus-5-5": {
+      "input": 26,
+      "output": 23537,
+      "cache_read": 1048630,
+      "cache_write": 126405,
+      "cache_write_1h": 0,
+      "web_search": 0,
+      "usd": 1.3126
+    }
+  },
+  "usd": 1.3126,
+  "messages": 13
+}

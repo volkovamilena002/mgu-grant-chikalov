@@ -706,7 +706,7 @@ def cmd_validate(args):
         if not f.exists():
             die(f"нет файла {f}")
     for f in files:
-        if f.name.startswith("00-"):
+        if f.name == "00-transparency.md":
             continue
         text = f.read_text(encoding="utf-8")
         if TEMPLATE_MARKER in text:

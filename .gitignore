@@ -16,3 +16,4 @@ projects/*/inputs/**/*.mp4
 projects/*/inputs/**/*.mov
 projects/*/inputs/**/*.wav
 projects/*/.lock
+projects/.cost_seen.json
