@@ -39,6 +39,14 @@ claude                                       # открыть агента в Cl
 ### В Cursor, Codex, OpenCode
 Правила подхватываются из `AGENTS.md` (Cursor — ещё и `.cursor/rules/strategist.mdc`). Навыки — обычные Markdown-файлы в `.claude/skills/*/SKILL.md`: агент читает их по команде `/имя`. Хуков там нет, поэтому статус агент смотрит сам (`strat status`), расходы вносятся через `strat cost add`.
 
+### MCP-сервер
+`tools/strat_mcp.py` открывает реестры и состояние агента как 22 MCP-инструмента: статус, поиск, источники и утверждения, impact, validate, стадии, решения, шаги, расходы. Сервер написан только на стандартной библиотеке.
+- **Cursor:** уже подключён в `.cursor/mcp.json`.
+- **Claude Code:** блок `strat` из `.mcp.json.example` → `.mcp.json`. По умолчанию выключен: агент и так работает через CLI, а описания инструментов в контексте стоят токенов.
+- **Claude Desktop и другие клиенты:** `"command": "python", "args": ["<путь к репо>/tools/strat_mcp.py"]`.
+
+Одобрения ворот G1–G3 и `stage --force` через MCP нет сознательно: это решения человека, их принимают в терминале.
+
 ## Что агент выдаёт
 
 В `projects/<slug>/outputs/`:
@@ -115,7 +123,8 @@ templates/           шаблоны итоговых документов
 .claude/hooks/       SessionStart (статус), source_guard (домены, инъекции, журнал), cost_tracker
 .claude/settings.json  хуки и разрешения
 config/              цены моделей, глобальные списки доменов
-tools/strat.py       CLI-ядро: состояние, реестры, проверка, решения, расходы, отчёт
+tools/strat.py       CLI-ядро: состояние, реестры, поиск, проверка, решения, расходы, отчёт
+tools/strat_mcp.py   то же ядро как MCP-сервер (stdio, stdlib)
 tools/transcribe.py  расшифровка аудио и видео (faster-whisper, необязательно)
 projects/<slug>/     данные конкретной задачи
 eval/                протокол сравнения с исходным способом

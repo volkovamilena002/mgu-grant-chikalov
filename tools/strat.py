@@ -692,6 +692,67 @@ def cmd_impact(args):
     _print_impact(p, args.id.upper(), flag=args.flag)
 
 
+# ----------------------------------------------------------------- поиск по знаниям
+def _stem(w: str) -> str:
+    """Грубая основа слова для русского: «роуминга», «роумингом» → «роумин»."""
+    w = w.lower()
+    return w[: max(4, len(w) - 2)] if len(w) > 5 else w
+
+
+def _match(query_stems: list[str], text: str) -> int:
+    words = re.findall(r"\w+", text.lower())
+    return sum(1 for q in query_stems if any(w.startswith(q) for w in words))
+
+
+def cmd_search(args):
+    """Поиск по формулировке в реестрах (утверждения и источники) текущего или всех проектов.
+    Отозванные утверждения по умолчанию скрыты; выводы агента помечены — память не превращает их в факты."""
+    stems = [_stem(w) for w in re.findall(r"\w+", args.query) if len(w) > 2]
+    if not stems:
+        die("пустой запрос")
+    if args.all_projects:
+        slugs = [d.name for d in sorted(PROJECTS.iterdir()) if (d / "state.json").exists()] if PROJECTS.exists() else []
+    else:
+        slugs = [get_project(args).slug]
+    need = len(stems) if args.strict else max(1, (len(stems) + 1) // 2)
+    hits = []
+    for slug in slugs:
+        pdir = PROJECTS / slug
+        sources = {s["id"]: s for s in read_jsonl(pdir / "sources.jsonl")}
+        for c in read_jsonl(pdir / "claims.jsonl"):
+            if c.get("status") == "revoked" and not args.include_revoked:
+                continue
+            score = _match(stems, c["text"] + " " + c.get("note", ""))
+            if score >= need:
+                hits.append((score, slug, c, "claim"))
+        for s in sources.values():
+            score = _match(stems, " ".join([s.get("title", ""), s.get("ref", ""), s.get("note", "")]))
+            if score >= need:
+                hits.append((score, slug, s, "source"))
+    hits.sort(key=lambda h: -h[0])
+    cur = active_slug()
+    for score, slug, item, kind in hits[: args.limit]:
+        where = "" if slug == cur and not args.all_projects else f"{slug}/"
+        if kind == "claim":
+            mark = ""
+            if item.get("status") == "revoked":
+                mark = f" [ОТОЗВАНО: {item.get('revoked_reason', '')}]"
+            elif item.get("needs_review"):
+                mark = " [требует пересмотра]"
+            elif item["type"] in ("hypothesis", "forecast", "assumption"):
+                mark = " [вывод/допущение — не факт]"
+            elif item["type"] == "synthetic":
+                mark = " [синтетика — не доказательство]"
+            print(f"{where}{item['id']:<5} {item['type']:<10} [{','.join(item.get('sources', [])) or '—'}]{mark}  {item['text']}")
+        else:
+            print(f"{where}{item['id']:<5} источник  {item.get('reliability', ''):<6} {item['title']} ← {item['ref']}")
+    if not hits:
+        print("Ничего не найдено.")
+    elif args.all_projects:
+        print("\nСведения из других проектов — это подсказки, а не факты для текущего: перепроверь дату и заново "
+              "зарегистрируй источник в текущем проекте.")
+
+
 # ----------------------------------------------------------------- проверка документов
 def cmd_validate(args):
     p = get_project(args)
@@ -1020,6 +1081,10 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--all", action="store_true"); a.set_defaults(fn=cmd_claim)
     a = sp.add_parser("impact", help="что затронет источник/утверждение"); a.add_argument("id"); a.add_argument("--flag", action="store_true", help="пометить затронутые утверждения для пересмотра"); a.set_defaults(fn=cmd_impact)
     a = sp.add_parser("validate", help="проверить документы outputs/"); a.add_argument("files", nargs="*"); a.set_defaults(fn=cmd_validate)
+    a = sp.add_parser("search", help="поиск по утверждениям и источникам")
+    a.add_argument("query"); a.add_argument("--all-projects", action="store_true", help="искать во всех проектах")
+    a.add_argument("--include-revoked", action="store_true"); a.add_argument("--strict", action="store_true", help="все слова запроса")
+    a.add_argument("--limit", type=int, default=20); a.set_defaults(fn=cmd_search)
 
     a = sp.add_parser("decision", help="решения и условия пересмотра"); a.add_argument("action", choices=["add", "list", "check", "close", "revise"]); a.add_argument("id", nargs="?")
     for f in ["title", "choice", "owner", "metric", "review-on", "review-if", "claims", "note"]:
@@ -1078,7 +1143,7 @@ def main(argv=None):
     if getattr(args, "cmd", None) == "step" and args.action != "pending" and not args.key:
         die("нужен ключ шага")
     slug = None if args.cmd in ("init", "use", "list") else active_slug(getattr(args, "project", None))
-    read_only = args.cmd in ("status", "list", "validate") or getattr(args, "action", None) in ("list", "show", "check", "pending")
+    read_only = args.cmd in ("status", "list", "validate", "search") or getattr(args, "action", None) in ("list", "show", "check", "pending")
     if slug and not read_only and (PROJECTS / slug).is_dir():
         with ProjectLock(PROJECTS / slug / ".lock"):
             args.fn(args)

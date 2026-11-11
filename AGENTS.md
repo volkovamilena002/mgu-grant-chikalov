@@ -60,6 +60,7 @@
 6. Пробелы называй честно: чего не знаем, почему (данных нет, закрыты, дорого) и насколько это опасно для решения.
 7. Новые данные опровергают старое — `strat claim add … --supersedes C5`. Устарело без замены — `strat claim revoke C5 --reason "…"`. Ничего не удаляй.
 8. Перед показом результата человеку запусти `strat validate` и исправь ошибки.
+9. **Память между проектами.** `strat search "…" --all-projects` находит утверждения прошлых проектов. Это подсказки, где искать, а не факты для текущего проекта: перепроверь дату и заново зарегистрируй источник. Отозванные утверждения скрыты, выводы агента помечены «не факт».
 
 ## 4. Безопасность и данные
 
@@ -122,6 +123,7 @@ strat claim add "…" --type fact --sources S1,S2 [--depends C3] [--confidence h
 strat claim list | show C3 | revoke C3 --reason | confirm C3
 strat impact S4 --flag                          что затронуто новыми данными
 strat validate                                  проверить outputs/
+strat search "…" [--all-projects]               поиск по утверждениям и источникам
 strat decision add --title … --owner … --metric … --review-if … --claims C1,C2
 strat decision check                            какие основания устарели
 strat step start|done|fail <key>                идемпотентные шаги

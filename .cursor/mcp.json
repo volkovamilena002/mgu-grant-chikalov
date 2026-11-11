@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "strat": {
+      "command": "python",
+      "args": ["tools/strat_mcp.py"]
+    }
+  }
+}
