@@ -1,0 +1,6 @@
+# Единые окончания строк: хуки (sh) и CLI должны работать на Windows, macOS и Linux
+* text=auto eol=lf
+*.docx binary
+*.pdf binary
+*.png binary
+*.jpg binary

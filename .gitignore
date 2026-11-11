@@ -1,0 +1,18 @@
+# секреты
+.env
+.env.*
+!.env.example
+# python
+__pycache__/
+*.pyc
+.venv/
+# временные файлы CLI
+*.tmp
+projects/*/.cost_state.json
+# локальные настройки Claude Code
+.claude/settings.local.json
+# тяжёлые медиа в проектах (держите в облаке, в репозиторий — расшифровки)
+projects/*/inputs/**/*.mp4
+projects/*/inputs/**/*.mov
+projects/*/inputs/**/*.wav
+projects/*/.lock

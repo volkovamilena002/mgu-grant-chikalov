@@ -1,0 +1,13 @@
+{"key": "collect-R2", "status": "started", "ts": "2026-11-11T16:18:36+03:00", "stage": "collect", "desc": "Цены интернета за границей: роуминг vs eSIM (Турция, ОАЭ, Таиланд)"}
+{"key": "collect-R4", "status": "started", "ts": "2026-11-11T16:18:36+03:00", "stage": "collect", "desc": "Конкуренты: eSIM-продукты операторов, банков, маркетплейсов РФ 2024-2026"}
+{"key": "collect-R1", "status": "started", "ts": "2026-11-11T16:18:57+03:00", "stage": "collect", "desc": "Размер и структура выездного турпотока"}
+{"key": "collect-R3", "status": "started", "ts": "2026-11-11T16:18:58+03:00", "stage": "collect", "desc": "Поддержка eSIM в РФ и ограничения"}
+{"key": "collect-R1", "status": "done", "ts": "2026-11-11T16:20:12+03:00", "stage": "collect", "result": "C2–C4, C11–C14; пробел: годовой итог 2025 не подтверждён первоисточником (в выдаче 17,5 млн у АТОР vs 13,4 млн по ФСБ)"}
+{"key": "collect-R3", "status": "done", "ts": "2026-11-11T16:20:12+03:00", "stage": "collect", "result": "C5–C10, C15; пробел: точная доля смартфонов с eSIM в РФ не найдена"}
+{"key": "collect-R5", "status": "started", "ts": "2026-11-11T16:20:12+03:00", "stage": "collect", "desc": "Боли и барьеры путешественников"}
+{"key": "collect-R5", "status": "done", "ts": "2026-11-11T16:20:46+03:00", "stage": "collect", "result": "C16–C21; два источника, оба с коммерческим интересом — боли сформулированы как гипотеза C21"}
+{"key": "collect-R2", "status": "done", "ts": "2026-11-11T16:20:56+03:00", "stage": "collect", "result": "C22-C28,C30; S7-S10"}
+{"key": "collect-R4", "status": "done", "ts": "2026-11-11T16:20:56+03:00", "stage": "collect", "result": "C29,C31-C33; S8,S11"}
+{"key": "collect-R4", "status": "done", "ts": "2026-11-11T16:21:52+03:00", "stage": "collect"}
+{"key": "verify-judge", "status": "started", "ts": "2026-11-11T16:39:16+03:00", "stage": "verify", "desc": "Оценка 03–07 по рубрике (judge, haiku); первая попытка прервана перерывом сессии"}
+{"key": "verify-judge", "status": "done", "ts": "2026-11-11T16:40:26+03:00", "stage": "verify", "result": "31/36, pass; 5 пунктов с баллом 1 исправлены правкой текста (канал приложения, пороги в 07, вывод в начале 06/07, действие недели 1, оговорка о критериях сравнения)"}

@@ -1,0 +1,17 @@
+{
+  "_comment": "Цены Anthropic API, $ за 1M токенов (проверено 2026-11-11, https://claude.com/pricing). Кэш-запись = 1.25 × вход (5-минутный кэш). Ключи сопоставляются по подстроке в id модели.",
+  "currency": "USD",
+  "models": {
+    "opus-5-5":   {"input": 4.00, "output": 20.00, "cache_write": 5.00,  "cache_read": 0.20},
+    "opus-5":     {"input": 5.00, "output": 25.00, "cache_write": 6.25,  "cache_read": 0.50},
+    "opus-4":     {"input": 5.00, "output": 25.00, "cache_write": 6.25,  "cache_read": 0.50},
+    "sonnet-5-5": {"input": 2.00, "output": 10.00, "cache_write": 2.50,  "cache_read": 0.10},
+    "sonnet-5":   {"input": 2.00, "output": 10.00, "cache_write": 2.50,  "cache_read": 0.20},
+    "sonnet-4":   {"input": 3.00, "output": 15.00, "cache_write": 3.75,  "cache_read": 0.30},
+    "haiku-5-5":  {"input": 0.10, "output": 0.50,  "cache_write": 0.125, "cache_read": 0.01},
+    "haiku-4":    {"input": 1.00, "output": 5.00,  "cache_write": 1.25,  "cache_read": 0.10},
+    "fable-5-2":  {"input": 8.00, "output": 40.00, "cache_write": 10.00, "cache_read": 0.20},
+    "fable-5":    {"input": 10.00, "output": 50.00, "cache_write": 12.50, "cache_read": 1.00}
+  },
+  "default": {"input": 4.00, "output": 20.00, "cache_write": 5.00, "cache_read": 0.20}
+}

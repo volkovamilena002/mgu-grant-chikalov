@@ -1,0 +1,5 @@
+{
+  "_comment": "Глобальные списки доменов для всех проектов (дополняются списками проекта: strat domain allow|block). Пустой allowed_domains = разрешены все открытые источники.",
+  "allowed_domains": [],
+  "blocked_domains": []
+}

@@ -1,0 +1,13 @@
+{
+  "_comment": "Необязательные MCP-серверы. Скопируйте в .mcp.json, если нужны. Требуют uv (https://docs.astral.sh/uv/). Ключи — только через переменные окружения.",
+  "mcpServers": {
+    "markitdown": {
+      "command": "uvx",
+      "args": ["markitdown-mcp"]
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
+  }
+}

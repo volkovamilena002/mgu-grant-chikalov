@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(python tools/strat.py:*)",
+      "Bash(python3 tools/strat.py:*)",
+      "Bash(py tools/strat.py:*)",
+      "WebSearch"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/run.sh\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start.py\"", "timeout": 30 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/run.sh\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/source_guard.py\" pre", "timeout": 10 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "WebFetch|WebSearch",
+        "hooks": [
+          { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/run.sh\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/source_guard.py\" post", "timeout": 10 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/run.sh\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/cost_tracker.py\"", "timeout": 30 }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/run.sh\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/cost_tracker.py\"", "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}
