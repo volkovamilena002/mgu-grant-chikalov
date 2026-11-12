@@ -1,5 +1,5 @@
 {
-  "_comment": "Необязательные MCP-серверы для Claude Code: скопируйте в .mcp.json. strat — реестры агента как MCP-инструменты (только stdlib); в Claude Code агент и так работает через CLI, поэтому сервер выключен по умолчанию (22 описания инструментов в контексте стоят токенов). markitdown и fetch требуют uv (https://docs.astral.sh/uv/). На macOS/Linux замените python на python3 при необходимости.",
+  "_comment": "Необязательные MCP-серверы для Claude Code: скопируйте в .mcp.json. strat — реестры агента как MCP-инструменты (только stdlib); в Claude Code агент и так работает через CLI, поэтому сервер выключен по умолчанию (23 описания инструментов в контексте стоят токенов). markitdown и fetch требуют uv (https://docs.astral.sh/uv/). На macOS/Linux замените python на python3 при необходимости.",
   "mcpServers": {
     "strat": {
       "command": "python",
