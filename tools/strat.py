@@ -102,6 +102,14 @@ REF_BLOCK_RE = re.compile(r"\[((?:[CS]\d+)(?:\s*[,;]\s*[CS]\d+)*)\]")
 
 
 # ----------------------------------------------------------------- утилиты
+def fit(line: str) -> str:
+    """Человеку в терминале — строка по ширине окна; агенту (вывод не в терминал) — полностью."""
+    if not sys.stdout.isatty():
+        return line
+    w = shutil.get_terminal_size((120, 20)).columns - 1
+    return line if len(line) <= w else line[: w - 1] + "…"
+
+
 def now() -> str:
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -410,9 +418,32 @@ def cmd_gate(args):
         die(f"нет ворот {g}")
     status = {"approve": "approved", "reject": "rejected", "reset": "pending"}[args.action]
     st["gates"][g] = {"status": status, "note": args.note or "", "at": now()}
+    if status == "approved":
+        # слепок одобренных документов: validate покажет, что правили после решения человека
+        st["gates"][g]["files"] = _outputs_digest(p)
     p.save_state(st)
     p.log(f"Ворота {g} ({GATE_TITLES[g]}): {status}. {args.note or ''}", "gate")
     print(f"{g}: {status}")
+
+
+def _outputs_digest(p: Project) -> dict:
+    return {f.name: hashlib.sha256(f.read_bytes()).hexdigest()[:16] for f in sorted(p.outputs.glob("*.md"))
+            if f.name != "00-transparency.md" and TEMPLATE_MARKER not in f.read_text(encoding="utf-8")}
+
+
+def _changed_after_gates(p: Project) -> dict:
+    """{файл: ворота} — документы, изменённые после последнего одобрения, которое их зафиксировало."""
+    now_d = _outputs_digest(p)
+    changed = {}
+    for g, v in p.state().get("gates", {}).items():  # G1→G3: позднейшие ворота перекрывают ранние
+        if v.get("status") != "approved":
+            continue
+        for name, h in v.get("files", {}).items():
+            if name in now_d and now_d[name] != h:
+                changed[name] = g
+            elif name in now_d:
+                changed.pop(name, None)
+    return changed
 
 
 BRIEF_FIELDS = ["question", "goal", "recipient", "decision", "deadline"]
@@ -512,7 +543,7 @@ def cmd_source(args):
         print(sid if new else f"{sid} (уже зарегистрирован)")
     elif args.action == "list":
         for s in p.sources():
-            print(f"{s['id']:<5} {s['kind']:<10} {s.get('reliability',''):<7} {s['title']}  ← {s['ref']}")
+            print(fit(f"{s['id']:<5} {s['kind']:<10} {s.get('reliability',''):<7} {s['title']}  ← {s['ref']}"))
     elif args.action == "show":
         for s in p.sources():
             if s["id"] == (args.id or "").upper():
@@ -654,12 +685,16 @@ def cmd_claim(args):
             flag = " ⚠пересмотр" if c.get("needs_review") else ""
             st = "" if c.get("status", "active") == "active" else f" ({c['status']})"
             src = ",".join(c.get("sources", [])) or "—"
-            print(f"{c['id']:<5} {c['type']:<11} {c.get('confidence',''):<7} [{src}]{st}{flag}  {c['text']}")
+            print(fit(f"{c['id']:<5} {c['type']:<11} {c.get('confidence',''):<7} [{src}]{st}{flag}  {c['text']}"))
     elif args.action == "show":
         c = by_id.get((args.text or "").upper())
         if not c:
             die("утверждение не найдено")
         print(json.dumps(c, ensure_ascii=False, indent=2))
+        known = {s["id"]: s for s in p.sources()}
+        for sid in c.get("sources", []):  # путь до первоисточника — одной командой
+            s = known.get(sid, {})
+            print(f"источник {sid} [{s.get('reliability', '?')}]: {s.get('title', '?')} ← {s.get('ref', '?')}")
     elif args.action in ("revoke", "confirm"):
         cid = (args.text or "").upper()
         if cid not in by_id:
@@ -673,6 +708,13 @@ def cmd_claim(args):
                 else:
                     c.pop("needs_review", None)
                     c["reviewed_at"] = now()
+                    if args.confidence and args.confidence != c.get("confidence"):
+                        # пересмотр уверенности не меняет содержание — ID остаётся, история сохраняется
+                        c.setdefault("confidence_history", []).append(
+                            {"at": now(), "old": c.get("confidence"), "new": args.confidence, "reason": args.reason or ""})
+                        changed = f"уверенность {c.get('confidence')} → {args.confidence}. "
+                        c["confidence"] = args.confidence
+                        args.reason = changed + (args.reason or "")
         write_jsonl(p.claims_path, claims)
         p.log(f"Утверждение {cid}: {args.action}. {args.reason or ''}", "claim")
         print(f"{cid}: {args.action}")
@@ -704,7 +746,7 @@ def _refs_in_text(text: str) -> set[str]:
     return ids
 
 
-def _print_impact(p: Project, start: str, flag: bool = False) -> dict:
+def _print_impact(p: Project, start: str, flag: bool = False, again: bool = False) -> dict:
     claims = p.claims()
     ids = _impacted_claims(claims, start)
     targets = set(ids) | {start}
@@ -722,18 +764,32 @@ def _print_impact(p: Project, start: str, flag: bool = False) -> dict:
     for d in decisions:
         print(f"  решение {d['id']} «{d['title']}» опирается на {', '.join(sorted(set(d['claims']) & targets))}")
     if flag and ids:
+        # когда изменилось основание: источник зарегистрирован / утверждение отозвано или заменено
+        if start.startswith("S"):
+            since = next((s.get("accessed", "") for s in p.sources() if s["id"] == start), "")
+        else:
+            st_c = next((c for c in claims if c["id"] == start), {})
+            since = st_c.get("revoked_at") or st_c.get("created", "")
+        flagged, skipped = [], []
         for c in claims:
             if c["id"] in ids:
+                if not again and since and c.get("reviewed_at", "") >= since:  # точность — секунды
+                    skipped.append(c["id"])  # уже проверено после этого изменения
+                    continue
                 c["needs_review"] = f"затронуто {start} ({now()})"
+                flagged.append(c["id"])
         write_jsonl(p.claims_path, claims)
-        p.log(f"Пересмотр: {start} затрагивает {', '.join(ids)}", "impact")
-        print(f"  помечено для пересмотра: {len(ids)}. Снять пометку: strat claim confirm C… / заменить: claim add --supersedes")
+        if flagged:
+            p.log(f"Пересмотр: {start} затрагивает {', '.join(flagged)}", "impact")
+        print(f"  помечено для пересмотра: {len(flagged)}. Снять пометку: strat claim confirm C… / заменить: claim add --supersedes")
+        if skipped:
+            print(f"  не помечены, уже проверены после изменения {start}: {', '.join(skipped)} (пометить всё равно: --again)")
     return {"claims": ids, "files": files, "decisions": [d["id"] for d in decisions]}
 
 
 def cmd_impact(args):
     p = get_project(args)
-    _print_impact(p, args.id.upper(), flag=args.flag)
+    _print_impact(p, args.id.upper(), flag=args.flag, again=args.again)
 
 
 # ----------------------------------------------------------------- поиск по знаниям
@@ -870,7 +926,12 @@ def cmd_validate(args):
                 and all(s.get("reliability") == "low" for s in srcs) and c.get("confidence") != "low"):
             warnings.append(f"реестр: факт {c['id']} держится только на источниках низкой надёжности "
                             f"({', '.join(s['id'] for s in srcs)}), а уверенность «{c.get('confidence')}» — "
-                            "понизьте (claim add … --confidence low --supersedes) или найдите первоисточник")
+                            f"понизьте (strat claim confirm {c['id']} --confidence low --reason …) или найдите первоисточник")
+    names = {f.name for f in files}
+    for name, g in _changed_after_gates(p).items():
+        if name in names:
+            info.append(f"{name}: изменён после одобрения {g} — покажите правку руководителю; "
+                        f"после повторного одобрения: strat gate {g} approve --note …")
     for label, items in (("ОШИБКИ", errors), ("ПРЕДУПРЕЖДЕНИЯ", warnings), ("СВЕДЕНИЯ", info)):
         if items:
             print(f"{label} ({len(items)}):")
@@ -926,8 +987,8 @@ def cmd_decision(args):
         print(did)
     elif args.action == "list":
         for d in rows:
-            print(f"{d['id']:<4} [{d['status']}] {d['title']} · отв.: {d.get('owner') or '—'} · "
-                  f"метрика: {d.get('metric') or '—'} · пересмотр: {d.get('review_on') or d.get('review_if') or '—'}")
+            print(fit(f"{d['id']:<4} [{d['status']}] {d['title']} · отв.: {d.get('owner') or '—'} · "
+                      f"метрика: {d.get('metric') or '—'} · пересмотр: {d.get('review_on') or d.get('review_if') or '—'}"))
     elif args.action == "check":
         issues = _decision_issues(p)
         for d, reasons in issues:
@@ -1169,7 +1230,8 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--type", choices=list(CLAIM_TYPES), help="при add по умолчанию hypothesis; при list — фильтр"); a.add_argument("--sources"); a.add_argument("--depends")
     a.add_argument("--confidence", choices=RELIABILITY); a.add_argument("--note"); a.add_argument("--supersedes"); a.add_argument("--reason")
     a.add_argument("--all", action="store_true"); a.set_defaults(fn=cmd_claim)
-    a = sp.add_parser("impact", help="что затронет источник/утверждение"); a.add_argument("id"); a.add_argument("--flag", action="store_true", help="пометить затронутые утверждения для пересмотра"); a.set_defaults(fn=cmd_impact)
+    a = sp.add_parser("impact", help="что затронет источник/утверждение"); a.add_argument("id"); a.add_argument("--flag", action="store_true", help="пометить затронутые утверждения для пересмотра")
+    a.add_argument("--again", action="store_true", help="помечать и уже проверенные после изменения"); a.set_defaults(fn=cmd_impact)
     a = sp.add_parser("validate", help="проверить документы outputs/"); a.add_argument("files", nargs="*"); a.set_defaults(fn=cmd_validate)
     a = sp.add_parser("search", help="поиск по утверждениям и источникам")
     a.add_argument("query"); a.add_argument("--all-projects", action="store_true", help="искать во всех проектах")

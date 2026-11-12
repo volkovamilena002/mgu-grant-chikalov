@@ -120,8 +120,8 @@ strat stage <stage> --next "…"                  перейти на стади
 strat source add --kind web --ref URL --title "…" --reliability high
 strat ingest path/to/file.pdf                   файл → inputs/ + реестр
 strat claim add "…" --type fact --sources S1,S2 [--depends C3] [--confidence high]
-strat claim list | show C3 | revoke C3 --reason | confirm C3
-strat impact S4 --flag                          что затронуто новыми данными
+strat claim list | show C3 | revoke C3 --reason | confirm C3 [--confidence low]
+strat impact S4 --flag                          что затронуто новыми данными (проверенное не помечает повторно)
 strat validate                                  проверить outputs/
 strat search "…" [--all-projects]               поиск по утверждениям и источникам
 strat decision add --title … --owner … --metric … --review-if … --claims C1,C2

@@ -20,3 +20,6 @@ projects/.cost_seen.json
 docs/description.html
 projects/.active
 projects/trial-*/
+
+# ТЗ организатора — не публикуем
+*.docx

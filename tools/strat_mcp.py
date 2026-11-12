@@ -160,16 +160,21 @@ def _(a):
     return ["claim", "revoke", a["id"], "--reason", a["reason"]]
 
 
-@tool("strat_claim_confirm", "Снять пометку «требует пересмотра» после проверки, что вывод устоял.", S("", {"id": STR, "project": PROJECT}, ["id"]))
+@tool("strat_claim_confirm", "Снять пометку «требует пересмотра» после проверки, что вывод устоял. confidence — пересмотреть уверенность (ID сохраняется, история пишется).",
+      S("", {"id": STR, "confidence": {"type": "string", "enum": REL}, "reason": STR, "project": PROJECT}, ["id"]))
 def _(a):
-    return ["claim", "confirm", a["id"]]
+    argv = ["claim", "confirm", a["id"]]
+    opt(argv, "--confidence", a.get("confidence"))
+    opt(argv, "--reason", a.get("reason"))
+    return argv
 
 
 @tool("strat_impact", "Что затрагивает источник или утверждение: зависимые утверждения (транзитивно), документы outputs/ со ссылками, решения. flag=true помечает затронутые для пересмотра.",
-      S("", {"id": STR, "flag": BOOL, "project": PROJECT}, ["id"]))
+      S("", {"id": STR, "flag": BOOL, "again": {**BOOL, "description": "помечать и уже проверенные после изменения"}, "project": PROJECT}, ["id"]))
 def _(a):
     argv = ["impact", a["id"]]
     opt(argv, "--flag", a.get("flag"))
+    opt(argv, "--again", a.get("again"))
     return argv
 
 

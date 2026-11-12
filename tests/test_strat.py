@@ -136,6 +136,42 @@ class StratTest(unittest.TestCase):
         self.assertIn("факт C2 держится только на источниках низкой надёжности", out)
         self.assertNotIn("факт C1 держится", out)
 
+    def test_confirm_can_lower_confidence_without_changing_id(self):
+        self.init()
+        self.run_s("source", "add", "--ref", "https://blog.example/x", "--title", "Блог", "--reliability", "low")
+        self.run_s("claim", "add", "Кешбэк до 30%", "--type", "fact", "--sources", "S1", "--confidence", "high")
+        self.run_s("claim", "confirm", "C1", "--confidence", "low", "--reason", "только блог")
+        c = json.loads((self.proj / "claims.jsonl").read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual((c["id"], c["confidence"], c["status"]), ("C1", "low", "active"))
+        self.assertEqual(c["confidence_history"][0]["old"], "high")
+        self.assertNotIn("держится", self.run_s("validate").stdout)
+
+    def test_impact_flag_does_not_reflag_already_reviewed(self):
+        self.init()
+        self.run_s("source", "add", "--ref", "https://example.org/a", "--title", "A")
+        self.run_s("claim", "add", "Факт", "--type", "fact", "--sources", "S1")     # C1
+        self.run_s("claim", "add", "Вывод", "--depends", "C1")                      # C2
+        self.run_s("impact", "S1", "--flag")
+        self.run_s("claim", "confirm", "C2")                                         # проверено
+        out = self.run_s("impact", "S1", "--flag").stdout
+        self.assertIn("уже проверены после изменения S1: C2", out)
+        claims = {json.loads(l)["id"]: json.loads(l) for l in (self.proj / "claims.jsonl").read_text(encoding="utf-8").splitlines()}
+        self.assertNotIn("needs_review", claims["C2"])
+        self.run_s("impact", "S1", "--flag", "--again")
+        claims = {json.loads(l)["id"]: json.loads(l) for l in (self.proj / "claims.jsonl").read_text(encoding="utf-8").splitlines()}
+        self.assertIn("needs_review", claims["C2"])
+
+    def test_validate_reports_docs_changed_after_gate(self):
+        self.init()
+        brief = self.proj / "outputs" / "01-brief.md"
+        brief.write_text("# Бриф\nВопрос: что делать.\n", encoding="utf-8")
+        self.run_s("gate", "G1", "approve", "--note", "ок")
+        self.assertNotIn("изменён после одобрения", self.run_s("validate", ok=False).stdout)
+        brief.write_text("# Бриф\nВопрос: что делать иначе.\n", encoding="utf-8")
+        self.assertIn("01-brief.md: изменён после одобрения G1", self.run_s("validate", ok=False).stdout)
+        self.run_s("gate", "G1", "approve", "--note", "правку видел")
+        self.assertNotIn("изменён после одобрения", self.run_s("validate", ok=False).stdout)
+
     def test_validate_flags_unreferenced_duration_but_not_plan_steps(self):
         self.init()
         (self.proj / "outputs" / "04-options.md").write_text(
