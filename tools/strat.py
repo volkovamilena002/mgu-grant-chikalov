@@ -93,6 +93,9 @@ DOC_STAGE = {"01-brief.md": "brief", "02-research-plan.md": "research_plan", "03
              "04-options.md": "options", "05-strategy-product.md": "strategy",
              "06-strategy-comms.md": "strategy", "07-validation-plan.md": "strategy"}
 NUMERIC_RE = re.compile(r"\d[\d\s.,]*\s?(%|₽|руб|млн|млрд|тыс|\$|€|п\.п\.|раз[а]?\b|пользоват|клиент|абонент|чел)", re.I)
+# Сроки («3–5 лет», «6 недель»): только 1–2-значные числа, чтобы не ловить годы вида «в 2023 году».
+DURATION_RE = re.compile(r"(?<![\d.,])\d{1,2}(?:\s?[–-]\s?\d{1,2})?\s?(?:лет\b|года?\b|месяц|мес\.|недел|дн(?:я|ей)\b|квартал)", re.I)
+DURATION_FILES = {"03-situation.md", "04-options.md"}
 REF_BLOCK_RE = re.compile(r"\[((?:[CS]\d+)(?:\s*[,;]\s*[CS]\d+)*)\]")
 
 
@@ -310,6 +313,14 @@ def stage_index(s: str) -> int:
 
 
 def cmd_status(args):
+    if not active_slug(getattr(args, "project", None)):
+        # без активного проекта — подсказка, а не ошибка (status вызывают первым в новой сессии и через MCP)
+        if args.json:
+            print(json.dumps({"active": None}, ensure_ascii=False))
+        else:
+            print("Активного проекта нет. Новая задача: strat init <slug> (или /kickoff); продолжить: strat use <slug>.\nПроекты:")
+            cmd_list(args)
+        return
     p = get_project(args)
     st = p.state()
     sources, claims = p.sources(), p.claims()
@@ -587,9 +598,18 @@ def cmd_claim(args):
             die("ответы модельных респондентов не могут подтверждать факт. Используйте тип synthetic или hypothesis")
         if ctype == "synthetic" and srcs and any(known_src[s]["kind"] != "synthetic" for s in srcs):
             print("предупреждение: synthetic-утверждение ссылается на несинтетический источник", file=sys.stderr)
+        conf = args.confidence
+        if ctype == "fact" and srcs:
+            rank = {"low": 0, "medium": 1, "high": 2}
+            best = max((known_src[s].get("reliability", "medium") for s in srcs), key=lambda r: rank.get(r, 1))
+            if conf is None:
+                conf = best  # факт не надёжнее лучшего своего источника
+            elif rank.get(conf, 1) > rank.get(best, 1):
+                print(f"предупреждение: уверенность «{conf}» выше надёжности источников («{best}»)", file=sys.stderr)
+        conf = conf or "medium"
         cid = next_id("C", claims)
         row = {"id": cid, "text": args.text, "type": ctype, "sources": srcs, "depends_on": deps,
-               "confidence": args.confidence, "status": "active", "created": now(),
+               "confidence": conf, "status": "active", "created": now(),
                "stage": p.state().get("stage")}
         if args.note:
             row["note"] = args.note
@@ -598,11 +618,18 @@ def cmd_claim(args):
             if old not in by_id:
                 die(f"утверждение {old} не найдено")
             row["supersedes"] = old
+            flagged = []
             for c in claims:
                 if c["id"] == old:
                     c["status"] = "revoked"
                     c["revoked_reason"] = f"заменено {cid}"
                     c["revoked_at"] = now()
+                elif old in c.get("depends_on", []) and c.get("status", "active") == "active":
+                    # прямые зависимые выводы опирались на старую версию — помечаем сразу, не дожидаясь impact
+                    c["needs_review"] = f"основание {old} заменено {cid} ({now()})"
+                    flagged.append(c["id"])
+            if flagged:
+                print(f"помечены для пересмотра: {', '.join(flagged)} (полный охват: strat impact {old})", file=sys.stderr)
             claims.append(row)
             write_jsonl(p.claims_path, claims)
             p.log(f"Утверждение {cid} заменяет {old}", "claim")
@@ -817,7 +844,9 @@ def cmd_validate(args):
                             warnings.append(f"{f.name}:{i}: {r} — синтетика; допустимо только как гипотеза")
                 elif r.startswith("S") and r not in sources:
                     errors.append(f"{f.name}:{i}: ссылка на несуществующий источник {r}")
-            if not refs and NUMERIC_RE.search(line):
+            # сроки проверяем только там, где они утверждения о мире (прогнозы), а не параметры плана
+            dur = f.name in DURATION_FILES and DURATION_RE.search(line) and not re.search(r"этап|пилот|шаг", line, re.I)
+            if not refs and (NUMERIC_RE.search(line) or dur):
                 warnings.append(f"{f.name}:{i}: число без ссылки на утверждение: «{line.strip()[:90]}»")
             if "TODO" in line or "{{" in line:
                 warnings.append(f"{f.name}:{i}: незаполненное место")
@@ -828,6 +857,12 @@ def cmd_validate(args):
         for s in c.get("sources", []):
             if s not in sources:
                 errors.append(f"реестр: {c['id']} ссылается на неизвестный источник {s}")
+        srcs = [sources[s] for s in c.get("sources", []) if s in sources]
+        if (c.get("status") == "active" and c["type"] == "fact" and srcs
+                and all(s.get("reliability") == "low" for s in srcs) and c.get("confidence") != "low"):
+            warnings.append(f"реестр: факт {c['id']} держится только на источниках низкой надёжности "
+                            f"({', '.join(s['id'] for s in srcs)}), а уверенность «{c.get('confidence')}» — "
+                            "понизьте (claim add … --confidence low --supersedes) или найдите первоисточник")
     for label, items in (("ОШИБКИ", errors), ("ПРЕДУПРЕЖДЕНИЯ", warnings), ("СВЕДЕНИЯ", info)):
         if items:
             print(f"{label} ({len(items)}):")
@@ -1087,7 +1122,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     a = sp.add_parser("claim", help="реестр утверждений"); a.add_argument("action", choices=["add", "list", "show", "revoke", "confirm"]); a.add_argument("text", nargs="?")
     a.add_argument("--type", choices=list(CLAIM_TYPES), help="при add по умолчанию hypothesis; при list — фильтр"); a.add_argument("--sources"); a.add_argument("--depends")
-    a.add_argument("--confidence", choices=RELIABILITY, default="medium"); a.add_argument("--note"); a.add_argument("--supersedes"); a.add_argument("--reason")
+    a.add_argument("--confidence", choices=RELIABILITY); a.add_argument("--note"); a.add_argument("--supersedes"); a.add_argument("--reason")
     a.add_argument("--all", action="store_true"); a.set_defaults(fn=cmd_claim)
     a = sp.add_parser("impact", help="что затронет источник/утверждение"); a.add_argument("id"); a.add_argument("--flag", action="store_true", help="пометить затронутые утверждения для пересмотра"); a.set_defaults(fn=cmd_impact)
     a = sp.add_parser("validate", help="проверить документы outputs/"); a.add_argument("files", nargs="*"); a.set_defaults(fn=cmd_validate)
@@ -1128,13 +1163,16 @@ class ProjectLock:
                 self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 os.write(self.fd, str(os.getpid()).encode())
                 return self
-            except FileExistsError:
+            except (FileExistsError, PermissionError):
+                # PermissionError: на Windows файл в состоянии «удаляется» другим процессом — тоже ждём
                 try:  # «зависшая» блокировка от упавшего процесса
                     if time.time() - self.path.stat().st_mtime > 120:
                         self.path.unlink()
                         continue
                 except FileNotFoundError:
                     continue
+                except PermissionError:
+                    pass
                 if time.monotonic() > deadline:
                     die(f"проект занят другим процессом ({self.path}); если это ошибка — удалите файл")
                 time.sleep(0.05)

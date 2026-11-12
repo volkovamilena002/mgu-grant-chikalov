@@ -18,3 +18,5 @@ projects/*/inputs/**/*.wav
 projects/*/.lock
 projects/.cost_seen.json
 docs/description.html
+projects/.active
+projects/trial-*/

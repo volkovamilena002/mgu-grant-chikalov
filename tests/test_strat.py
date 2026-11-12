@@ -38,6 +38,11 @@ class StratTest(unittest.TestCase):
         self.run_s("init", "demo", "--title", "Демо", "--question", "Почему падает удержание?")
 
     # --------------------------------------------------------------
+    def test_status_without_active_project_is_a_hint_not_error(self):
+        r = self.run_s("status")
+        self.assertIn("Активного проекта нет", r.stdout)
+        self.assertEqual(json.loads(self.run_s("status", "--json").stdout), {"active": None})
+
     def test_init_creates_structure_and_templates(self):
         self.init()
         for f in ["state.json", "sources.jsonl", "claims.jsonl", "journal.md", "outputs/04-options.md"]:
@@ -96,11 +101,13 @@ class StratTest(unittest.TestCase):
 
     def test_supersede_revokes_old(self):
         self.init()
-        self.run_s("claim", "add", "Старое")
-        self.run_s("claim", "add", "Новое", "--supersedes", "C1")
+        self.run_s("claim", "add", "Старое")                                   # C1
+        self.run_s("claim", "add", "Вывод из старого", "--depends", "C1")      # C2
+        self.run_s("claim", "add", "Новое", "--supersedes", "C1")              # C3
         claims = {json.loads(l)["id"]: json.loads(l) for l in (self.proj / "claims.jsonl").read_text(encoding="utf-8").splitlines() if l}
         self.assertEqual(claims["C1"]["status"], "revoked")
-        self.assertEqual(claims["C2"]["supersedes"], "C1")
+        self.assertEqual(claims["C3"]["supersedes"], "C1")
+        self.assertIn("заменено C3", claims["C2"]["needs_review"])  # зависимый вывод помечен сразу
 
     def test_validate_catches_problems(self):
         self.init()
@@ -116,6 +123,29 @@ class StratTest(unittest.TestCase):
         self.assertIn("C2 отозвано", r.stdout)
         self.assertIn("несуществующее утверждение C9", r.stdout)
         self.assertIn("число без ссылки", r.stdout)
+
+    def test_fact_confidence_follows_source_reliability(self):
+        self.init()
+        self.run_s("source", "add", "--ref", "https://blog.example/x", "--title", "Блог", "--reliability", "low")
+        self.run_s("claim", "add", "Кешбэк до 15%", "--type", "fact", "--sources", "S1")          # C1 → low
+        self.run_s("claim", "add", "Кешбэк до 30%", "--type", "fact", "--sources", "S1",
+                   "--confidence", "high")                                                       # C2 — завышено
+        claims = [json.loads(l) for l in (self.proj / "claims.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(claims[0]["confidence"], "low")
+        out = self.run_s("validate").stdout
+        self.assertIn("факт C2 держится только на источниках низкой надёжности", out)
+        self.assertNotIn("факт C1 держится", out)
+
+    def test_validate_flags_unreferenced_duration_but_not_plan_steps(self):
+        self.init()
+        (self.proj / "outputs" / "04-options.md").write_text(
+            "# Варианты\n## Вариант A. Оставить как есть\nСегмент вырастет через 3–5 лет.\n"
+            "Этап 0 (2–4 недели).\nВ 2023 году было иначе.\n## Вариант B\n## Вариант C\n## Сравнение\n",
+            encoding="utf-8")
+        out = self.run_s("validate", ok=False).stdout
+        self.assertIn("через 3–5 лет", out)
+        self.assertNotIn("Этап 0", out)
+        self.assertNotIn("2023 году", out)
 
     def test_validate_options_needs_three(self):
         self.init()

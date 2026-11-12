@@ -69,7 +69,8 @@ class McpTest(unittest.TestCase):
     def test_end_to_end_registry_rules(self):
         self.handshake()
         text, err = self.call("strat_status")
-        self.assertTrue(err)  # нет активного проекта
+        self.assertFalse(err)  # нет активного проекта — подсказка, а не ошибка
+        self.assertIn("Активного проекта нет", text)
         _, err = self.call("strat_init", slug="demo", title="Демо")
         self.assertFalse(err)
         text, err = self.call("strat_claim_add", text="Рынок растёт", type="fact")
