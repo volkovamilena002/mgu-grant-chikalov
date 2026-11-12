@@ -49,8 +49,10 @@ def transcript_files(ev: dict) -> list[Path]:
     return out
 
 
-def session_messages(files: list[Path], since: datetime | None = None) -> dict[str, tuple[str, dict]]:
-    """id сообщения → (модель, итоговый usage). Сообщения до since (создания проекта) отбрасываются."""
+def session_messages(files: list[Path], since: datetime | None = None,
+                     times: dict | None = None) -> dict[str, tuple[str, dict]]:
+    """id сообщения → (модель, итоговый usage). Сообщения до since (создания проекта) отбрасываются.
+    Если передан times — туда пишется время сообщения (id → datetime) для разнесения по стадиям."""
     msgs: dict[str, tuple[str, dict]] = {}
     for f in files:
         try:
@@ -68,6 +70,8 @@ def session_messages(files: list[Path], since: datetime | None = None) -> dict[s
                     continue
                 mid = m.get("id") or r.get("requestId") or r.get("uuid")
                 msgs[mid] = (model, u)  # последняя строка сообщения несёт итоговый usage
+                if times is not None and r.get("timestamp"):
+                    times.setdefault(mid, _ts(r["timestamp"]))
         except Exception:
             continue
     return msgs
@@ -98,6 +102,36 @@ def cost_usd(d: dict, pr: dict) -> float:
     return per_m / 1_000_000 + d["web_search"] * WEB_SEARCH_USD
 
 
+def stage_timeline(proj: Path) -> list[tuple[datetime, str]]:
+    """(время, стадия) из журнала: в каждой строке «- <время> · [вид] · <стадия> · …»."""
+    out = []
+    try:
+        for line in (proj / "journal.md").read_text(encoding="utf-8").splitlines():
+            parts = line[2:].split(" · ") if line.startswith("- ") else []
+            if len(parts) >= 3:
+                try:
+                    out.append((_ts(parts[0]), parts[2].strip()))
+                except ValueError:
+                    continue
+    except OSError:
+        pass
+    return out
+
+
+def stage_at(timeline: list[tuple[datetime, str]], t: datetime | None, fallback: str) -> str:
+    """Стадия, действовавшая в момент сообщения: если за один ход пройдено несколько стадий,
+    расход каждой попадает в свою, а не весь — в стадию, активную на момент Stop."""
+    if t is None:
+        return fallback
+    st = None
+    for ts, stage in timeline:
+        if ts <= t:
+            st = stage
+        else:
+            break
+    return st or fallback
+
+
 SEEN = PROJECTS / ".cost_seen.json"  # глобально: какие сообщения сессии уже учтены (в любом проекте)
 
 
@@ -108,7 +142,8 @@ def main():
     sid = ev.get("session_id") or Path(ev["transcript_path"]).stem
     proj = active_project()
     created = load_state(proj).get("created") if proj else None
-    msgs = session_messages(transcript_files(ev), _ts(created) if created else None)
+    times: dict = {}
+    msgs = session_messages(transcript_files(ev), _ts(created) if created else None, times)
     try:
         seen_all = json.loads(SEEN.read_text(encoding="utf-8"))
     except Exception:
@@ -121,15 +156,20 @@ def main():
     # Нет активного проекта → сообщения помечаются учтёнными и никому не приписываются.
     if proj:
         table, default = load_prices()
-        stage = load_state(proj).get("stage", "?")
+        current = load_state(proj).get("stage", "?")
+        timeline = stage_timeline(proj)
         ts = datetime.now().astimezone().isoformat(timespec="seconds")
+        by_stage: dict[str, list] = {}
+        for mid, mu in new.items():
+            by_stage.setdefault(stage_at(timeline, times.get(mid), current), []).append(mu)
         rows = []
-        for model, d in aggregate(new.values()).items():
-            usd = cost_usd(d, price_for(model, table, default))
-            row = {**d, "cache_write": d["cache_write"] + d["cache_write_1h"]}  # для сводки strat cost
-            row.pop("cache_write_1h")
-            rows.append({"ts": ts, "stage": stage, "source": "claude-code", "session": sid[:8], "model": model,
-                         **row, "usd": round(usd, 6)})
+        for stage, items in by_stage.items():
+            for model, d in aggregate(items).items():
+                usd = cost_usd(d, price_for(model, table, default))
+                row = {**d, "cache_write": d["cache_write"] + d["cache_write_1h"]}  # для сводки strat cost
+                row.pop("cache_write_1h")
+                rows.append({"ts": ts, "stage": stage, "source": "claude-code", "session": sid[:8], "model": model,
+                             **row, "usd": round(usd, 6)})
         with (proj / "costs.jsonl").open("a", encoding="utf-8") as f:
             for r in rows:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")

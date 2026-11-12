@@ -220,9 +220,19 @@ def _(a):
     return argv
 
 
-@tool("strat_decision_check", "Какие решения пора пересмотреть: отозванные основания, наступившие сроки, условия.", S("", {"project": PROJECT}))
+@tool("strat_decision_check", "Какие решения пора пересмотреть: отозванные или помеченные основания, наступившие сроки; conditions=true — ещё и условия пересмотра.",
+      S("", {"conditions": {"type": "boolean"}, "project": PROJECT}))
 def _(a):
-    return ["decision", "check"]
+    return ["decision", "check"] + (["--conditions"] if a.get("conditions") else [])
+
+
+@tool("strat_decision_rebase", "Перевести решение на утверждения-замены, когда после пересмотра оно по сути устояло (история оснований сохраняется). Если решение меняется по существу — не этот инструмент: revise в терминале и новое решение.",
+      S("", {"id": STR, "claims": LIST, "note": STR, "project": PROJECT}, ["id", "claims", "note"]))
+def _(a):
+    argv = ["decision", "rebase", a["id"]]
+    opt(argv, "--claims", a.get("claims"))
+    opt(argv, "--note", a.get("note"))
+    return argv
 
 
 @tool("strat_step", "Идемпотентные шаги для дорогих действий: start перед действием (если шаг уже выполнен — повтор не нужен), done/fail после, pending — незавершённые.",

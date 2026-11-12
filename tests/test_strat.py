@@ -147,6 +147,24 @@ class StratTest(unittest.TestCase):
         self.assertNotIn("Этап 0", out)
         self.assertNotIn("2023 году", out)
 
+    def test_decisions_with_stale_basis_show_in_status_and_can_be_rebased(self):
+        self.init()
+        self.run_s("claim", "add", "Основание")                                        # C1
+        self.run_s("decision", "add", "--title", "Делать X", "--claims", "C1", "--review-if", "если Y")
+        check = self.run_s("decision", "check").stdout
+        self.assertIn("Решений с устаревшими основаниями нет", check)
+        self.assertNotIn("если Y", check)                     # условия — только по --conditions
+        self.assertIn("если Y", self.run_s("decision", "check", "--conditions").stdout)
+        self.run_s("claim", "add", "Основание, уточнённое", "--supersedes", "C1")     # C2
+        status = self.run_s("status").stdout
+        self.assertIn("Решения к пересмотру", status)        # видно сразу после перерыва (хук SessionStart)
+        self.assertIn("D1", json.loads(self.run_s("status", "--json").stdout)["decisions_to_review"])
+        self.assertEqual(self.run_s("decision", "rebase", "D1", "--claims", "C1", ok=False).returncode, 1)  # отозвано
+        self.run_s("decision", "rebase", "D1", "--claims", "C2", "--note", "по сути устояло")
+        self.assertIn("Решений с устаревшими основаниями нет", self.run_s("decision", "check").stdout)
+        d = json.loads((self.proj / "decisions.jsonl").read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual(d["basis_history"][0]["old"], ["C1"])
+
     def test_validate_options_needs_three(self):
         self.init()
         (self.proj / "outputs" / "04-options.md").write_text(

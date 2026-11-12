@@ -126,6 +126,7 @@ strat validate                                  проверить outputs/
 strat search "…" [--all-projects]               поиск по утверждениям и источникам
 strat decision add --title … --owner … --metric … --review-if … --claims C1,C2
 strat decision check                            какие основания устарели
+strat decision rebase D2 --claims C40 --note …   решение устояло — перевести на новые основания
 strat step start|done|fail <key>                идемпотентные шаги
 strat cost / report                             расходы / отчёт о прозрачности
 ```

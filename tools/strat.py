@@ -92,6 +92,8 @@ STRATEGY_FILES = {"05-strategy-product.md", "06-strategy-comms.md", "07-validati
 DOC_STAGE = {"01-brief.md": "brief", "02-research-plan.md": "research_plan", "03-situation.md": "situation",
              "04-options.md": "options", "05-strategy-product.md": "strategy",
              "06-strategy-comms.md": "strategy", "07-validation-plan.md": "strategy"}
+# Числа-утверждения о мире. Параметры плана («5 интервью», «порог 30 ответов») сюда сознательно не входят:
+# это решения, а не факты; их обоснованность проверяет red-team (проверено на пробном прогоне — иначе шум).
 NUMERIC_RE = re.compile(r"\d[\d\s.,]*\s?(%|₽|руб|млн|млрд|тыс|\$|€|п\.п\.|раз[а]?\b|пользоват|клиент|абонент|чел)", re.I)
 # Сроки («3–5 лет», «6 недель»): только 1–2-значные числа, чтобы не ловить годы вида «в 2023 году».
 DURATION_RE = re.compile(r"(?<![\d.,])\d{1,2}(?:\s?[–-]\s?\d{1,2})?\s?(?:лет\b|года?\b|месяц|мес\.|недел|дн(?:я|ей)\b|квартал)", re.I)
@@ -331,12 +333,14 @@ def cmd_status(args):
     flagged = [c["id"] for c in active_claims if c.get("needs_review")]
     open_q = [q for q in st.get("open_questions", []) if q.get("status") == "open"]
     pending_steps = _pending_steps(p)
+    dec_issues = _decision_issues(p)
     cost = _cost_summary(p)
     if args.json:
         print(json.dumps({
             "project": p.slug, "title": st.get("title"), "stage": st["stage"],
             "gates": st["gates"], "next_step": st.get("next_step"),
             "sources": len(sources), "claims": by_type, "needs_review": flagged,
+            "decisions_to_review": {d["id"]: r for d, r in dec_issues},
             "open_questions": open_q, "pending_steps": pending_steps, "cost_usd": cost["usd"],
         }, ensure_ascii=False, indent=2))
         return
@@ -349,6 +353,10 @@ def cmd_status(args):
           (", ".join(f"{k}={v}" for k, v in sorted(by_type.items())) or "0"))
     if flagged:
         print(f"Требуют пересмотра: {', '.join(flagged)}")
+    if dec_issues:
+        print("Решения к пересмотру (навык /decisions):")
+        for d, reasons in dec_issues:
+            print(f"  {d['id']} «{d['title']}»: " + "; ".join(reasons))
     if open_q:
         print("Открытые вопросы:")
         for q in open_q:
@@ -874,6 +882,30 @@ def cmd_validate(args):
 
 
 # ----------------------------------------------------------------- решения
+def _decision_issues(p: "Project") -> list[tuple[dict, list[str]]]:
+    """Активные решения, основания которых отозваны или требуют пересмотра, либо наступил срок пересмотра."""
+    claims = {c["id"]: c for c in p.claims()}
+    today = dt.date.today().isoformat()
+    out = []
+    for d in p.decisions():
+        if d.get("status") != "active":
+            continue
+        reasons = []
+        for cid in d.get("claims", []):
+            c = claims.get(cid)
+            if not c:
+                continue
+            if c.get("status") == "revoked":
+                reasons.append(f"основание {cid} отозвано")
+            elif c.get("needs_review"):
+                reasons.append(f"основание {cid} требует пересмотра")
+        if d.get("review_on") and d["review_on"] <= today:
+            reasons.append(f"наступил срок пересмотра {d['review_on']}")
+        if reasons:
+            out.append((d, reasons))
+    return out
+
+
 def cmd_decision(args):
     p = get_project(args)
     rows = p.decisions()
@@ -897,30 +929,43 @@ def cmd_decision(args):
             print(f"{d['id']:<4} [{d['status']}] {d['title']} · отв.: {d.get('owner') or '—'} · "
                   f"метрика: {d.get('metric') or '—'} · пересмотр: {d.get('review_on') or d.get('review_if') or '—'}")
     elif args.action == "check":
-        claims = {c["id"]: c for c in p.claims()}
-        today = dt.date.today().isoformat()
-        found = False
-        for d in rows:
-            if d.get("status") != "active":
-                continue
-            reasons = []
-            for cid in d.get("claims", []):
-                c = claims.get(cid)
-                if not c:
-                    continue
-                if c.get("status") == "revoked":
-                    reasons.append(f"основание {cid} отозвано")
-                elif c.get("needs_review"):
-                    reasons.append(f"основание {cid} требует пересмотра")
-            if d.get("review_on") and d["review_on"] <= today:
-                reasons.append(f"наступил срок пересмотра {d['review_on']}")
-            if reasons:
-                found = True
-                print(f"{d['id']} «{d['title']}»: " + "; ".join(reasons))
-            elif d.get("review_if"):
-                print(f"{d['id']} «{d['title']}»: проверьте условие пересмотра — {d['review_if']}")
-        if not found:
+        issues = _decision_issues(p)
+        for d, reasons in issues:
+            print(f"{d['id']} «{d['title']}»: " + "; ".join(reasons))
+        if not issues:
             print("Решений с устаревшими основаниями нет.")
+        conds = [d for d in rows if d.get("status") == "active" and d.get("review_if")]
+        if conds and args.conditions:
+            print("Условия пересмотра (проверяются по новым данным, автоматически не отслеживаются):")
+            for d in conds:
+                print(f"  {d['id']}: {d['review_if']}")
+        elif conds:
+            print(f"Условия пересмотра заданы у {len(conds)} решений — показать: strat decision check --conditions")
+    elif args.action == "rebase":
+        # перевести решение на утверждения-замены, когда по сути оно устояло; история оснований сохраняется
+        did = (args.id or "").upper()
+        cl = split_ids(args.claims)
+        if not cl:
+            die("нужен --claims с новыми основаниями")
+        claims = {c["id"]: c for c in p.claims()}
+        for c in cl:
+            if c not in claims:
+                die(f"утверждение {c} не найдено")
+            if claims[c].get("status") == "revoked":
+                die(f"{c} отозвано — нельзя делать его основанием")
+        for d in rows:
+            if d["id"] == did:
+                if d.get("status") != "active":
+                    die(f"решение {did} не активно ({d.get('status')})")
+                d.setdefault("basis_history", []).append({"at": now(), "old": d.get("claims", []), "new": cl,
+                                                          "note": args.note or ""})
+                d["claims"] = cl
+                write_jsonl(p.decisions_path, rows)
+                p.log(f"Решение {did}: основания {', '.join(d['basis_history'][-1]['old']) or '—'} → "
+                      f"{', '.join(cl)}. {args.note or ''}", "decision")
+                print(f"{did}: основания {', '.join(cl)}")
+                return
+        die("решение не найдено")
     elif args.action in ("close", "revise"):
         did = (args.id or "").upper()
         for d in rows:
@@ -1131,7 +1176,8 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--include-revoked", action="store_true"); a.add_argument("--strict", action="store_true", help="все слова запроса")
     a.add_argument("--limit", type=int, default=20); a.set_defaults(fn=cmd_search)
 
-    a = sp.add_parser("decision", help="решения и условия пересмотра"); a.add_argument("action", choices=["add", "list", "check", "close", "revise"]); a.add_argument("id", nargs="?")
+    a = sp.add_parser("decision", help="решения и условия пересмотра"); a.add_argument("action", choices=["add", "list", "check", "close", "revise", "rebase"]); a.add_argument("id", nargs="?")
+    a.add_argument("--conditions", action="store_true", help="check: показать условия пересмотра")
     for f in ["title", "choice", "owner", "metric", "review-on", "review-if", "claims", "note"]:
         a.add_argument(f"--{f}")
     a.set_defaults(fn=cmd_decision)

@@ -117,6 +117,19 @@ class HooksTest(unittest.TestCase):
         # 1M токенов часового кэша × $4 × 2 + 3 поиска × $0.01
         self.assertAlmostEqual(rows[0]["usd"], 8.03, places=4)
 
+    def test_cost_tracker_splits_turn_by_stage_using_message_time(self):
+        # за один ход пройдены две стадии: расход каждой — в свою, а не весь в стадию на момент Stop
+        with (self.proj / "journal.md").open("a", encoding="utf-8") as f:
+            f.write("- 2999-01-01T00:00:00+00:00 · [stage] · options · Стадия: 5. Варианты\n")
+        tr = self.tmp / "sess4.jsonl"
+        u = {"input_tokens": 1000, "output_tokens": 0}
+        with tr.open("w", encoding="utf-8") as f:
+            f.write(json.dumps({"timestamp": "2998-06-01T00:00:00Z", "message": {"id": "a", "model": "claude-opus-5-5", "usage": u}}) + "\n")
+            f.write(json.dumps({"timestamp": "2999-06-01T00:00:00Z", "message": {"id": "b", "model": "claude-opus-5-5", "usage": u}}) + "\n")
+        self.hook("cost_tracker.py", {"session_id": "sess4", "transcript_path": str(tr)})
+        rows = [json.loads(l) for l in (self.proj / "costs.jsonl").read_text(encoding="utf-8").splitlines() if l]
+        self.assertEqual(sorted(r["stage"] for r in rows), ["brief", "options"])
+
     def test_cost_tracker_switching_projects_does_not_double_count(self):
         tr = self.tmp / "sess3.jsonl"
         def write(ids):
