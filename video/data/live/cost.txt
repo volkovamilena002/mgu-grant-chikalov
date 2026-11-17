@@ -1,0 +1,16 @@
+Всего: $13.18   токены: вход 442 · выход 203 508 · кэш-чтение 24 002 983 · кэш-запись 916 510
+По стадиям:
+  support                      $5.552
+  strategy                     $1.880
+  collect                      $1.625
+  options                      $1.382
+  verify                       $1.193
+  situation                    $0.633
+  brief                        $0.582
+  research_plan                $0.329
+По моделям:
+  claude-opus-5-5              $12.114
+  claude-sonnet-5-5            $1.041
+  claude-haiku-5-5             $0.021
+По источнику учёта:
+  claude-code                  $13.177

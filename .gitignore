@@ -23,3 +23,12 @@ projects/trial-*/
 
 # ТЗ организатора — не публикуем
 *.docx
+
+# видео (video/): зависимости, окружение озвучки, тяжёлые файлы, кеш озвучки
+video/node_modules/
+video/.venv/
+video/cache/
+video/out/*.mp4
+video/out/*.webm
+video/*.log
+*.webm

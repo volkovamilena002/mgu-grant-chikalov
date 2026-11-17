@@ -1,0 +1,18 @@
+{
+  "id": "C41",
+  "text": "Закон 210-ФЗ от 26.06.2026 (второй антифрод-пакет, изменения в закон «О связи»): вступает в силу со дня опубликования, основная часть поэтапно с 01.09.2026 по 01.01.2028; основной массив норм о связи — с 01.03.2027",
+  "type": "fact",
+  "sources": [
+    "S19",
+    "S21"
+  ],
+  "depends_on": [],
+  "confidence": "medium",
+  "status": "revoked",
+  "created": "2026-11-16T19:26:01+03:00",
+  "stage": "collect",
+  "revoked_reason": "заменено C54",
+  "revoked_at": "2026-11-16T19:27:16+03:00"
+}
+источник S19 [medium]: PGP (юрфирма): Принят второй пакет мер противодействия кибермошенничеству (210-ФЗ) ← https://www.pgplaw.ru/analytics-and-brochures/alerts/novye-mery-protivodeystviya-kibermoshennichestvu/
+источник S21 [medium]: Профиль: Антифрод 2.0 — борьба с кибермошенниками набирает обороты ← https://profile.ru/society/antifrod-2-0-borba-s-kibermoshennikami-nabiraet-oboroty-1880923/
