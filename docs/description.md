@@ -4,7 +4,7 @@
 
 | Пункт | Значение |
 |---|---|
-| Команда | Чикалов Александр |
+| Команда | Милена Викторова |
 | Репозиторий | https://github.com/volkovamilena002/product-strategist-agent (открытый) |
 | Видео | https://drive.google.com/drive/folders/1n8NFq5QJm3UpFKU_FG3aKNWxRsFrooTJ |
 | Демонстрационный проект | защита от мошеннических звонков (бриф и запрос — `docs/demo-brief.md`; отдельного брифа организаторы не публикуют, только открытые данные). Второй пример — туристические eSIM (`projects/esim-travel`) |
