@@ -445,7 +445,7 @@ add({
     { k: "b", text: "Реестр утверждений, validate, impact, decision check", p: 0 },
     { k: "b", text: "Продолжение после перерыва и пересмотр при новых данных", p: 1 },
     { k: "b", text: "Только открытые источники; пробелы названы честно", p: 1 },
-    { k: "big", text: "github.com/volkovamilena002/mgu-grant-chikalov", p: 1 },
+    { k: "big", text: "github.com/volkovamilena002/product-strategist-agent", p: 1 },
   ],
 });
 
